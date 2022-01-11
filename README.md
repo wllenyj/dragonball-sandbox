@@ -11,4 +11,7 @@ This repository contains the following crates:
 ## How to build
 ```bash
 cargo build --release
+
+# for debug
+cargo build
 ```
