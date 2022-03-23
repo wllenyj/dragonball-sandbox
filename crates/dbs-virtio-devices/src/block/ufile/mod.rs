@@ -1,6 +1,9 @@
 // Copyright (C) 2019 Alibaba Cloud. All rights reserved.
 // SPDX-License-Identifier: Apache-2.0
 
+mod localfile;
+pub use self::localfile::LocalFile;
+
 use std::fs::File;
 use std::io::{self, Read, Seek, Write};
 use std::os::unix::io::RawFd;
@@ -81,4 +84,3 @@ pub trait Ufile: Read + Write + Seek + Send {
     /// Is IO context available.
     fn is_io_context_ready(&self) -> bool;
 }
-
