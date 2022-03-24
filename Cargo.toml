@@ -11,3 +11,6 @@ members = [
     "crates/dbs-utils",
     "crates/dbs-interrupt",
 ]
+
+[patch.'crates-io']
+fuse-backend-rs = { path="/home/wanglei01/opt/work/fuse-upstream" }

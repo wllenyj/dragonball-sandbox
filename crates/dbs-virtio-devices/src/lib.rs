@@ -26,6 +26,9 @@ pub mod mmio;
 #[cfg(feature = "virtio-blk")]
 pub mod block;
 
+#[cfg(feature = "virtio-fs")]
+pub mod fs;
+
 use std::io::Error as IOError;
 
 use virtio_queue::Error as VqError;
