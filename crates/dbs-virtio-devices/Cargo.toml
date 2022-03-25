@@ -19,6 +19,7 @@ dbs-interrupt = { version = "0.1.0", path = "../dbs-interrupt", features = ["kvm
 dbs-utils = { version = "0.1.0", path = "../dbs-utils" }
 epoll = "4.0.1"
 fuse-backend-rs = { version = "0.3.0", optional = true }
+downcast-rs = ">= 1.0.4"
 kvm-bindings = "0.5.0"
 kvm-ioctls = "0.11.0"
 libc = "0.2.39"
@@ -42,3 +43,4 @@ vm-memory = { version = "0.7.0", features = [ "backend-mmap", "backend-atomic" ]
 virtio-mmio = []
 virtio-blk = ["virtio-mmio"]
 virtio-fs = ["virtio-mmio", "fuse-backend-rs/virtiofs", "rafs/virtio-fs", "blobfs/virtiofs"]
+virtio-vsock = ["virtio-mmio"]
