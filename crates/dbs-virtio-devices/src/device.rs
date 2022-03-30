@@ -565,6 +565,16 @@ impl VirtioDeviceInfo {
     }
 }
 
+impl PartialEq for VirtioDeviceInfo {
+    fn eq(&self, other: &VirtioDeviceInfo) -> bool {
+        self.driver_name == other.driver_name
+            && self.avail_features() == other.avail_features()
+            && self.acked_features() == other.acked_features()
+            && self.queue_sizes == other.queue_sizes
+            && self.config_space == other.config_space
+    }
+}
+
 #[cfg(test)]
 pub(crate) mod tests {
     use super::*;
