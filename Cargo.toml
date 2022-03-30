@@ -12,9 +12,6 @@ members = [
     "crates/dbs-interrupt",
 ]
 
-[patch.'crates-io']
-fuse-backend-rs = { path="/home/wanglei01/opt/work/fuse-upstream" }
-
 [patch.'https://github.com/dragonflyoss/image-service']
-rafs = { path = "/home/wanglei01/opt/work/image-service/rafs" }
-blobfs = { path = "/home/wanglei01/opt/work/image-service/blobfs" }
+rafs = { git = "https://github.com/wllenyj/image-service.git", rev = "e9810c023d300b72a3ffcf4a918e18eb0618cf98" }
+blobfs = { git ="https://github.com/wllenyj/image-service.git", rev = "e9810c023d300b72a3ffcf4a918e18eb0618cf98" }
