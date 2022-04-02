@@ -408,6 +408,7 @@ pub trait VirtioDevice<AS: GuestAddressSpace, Q: QueueStateT, R: GuestMemoryRegi
 
     /// Used to downcast to the specific type.
     fn as_any(&self) -> &dyn Any;
+    fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 /// A helper struct to support basic operations for emulated VirtioDevice backend devices.

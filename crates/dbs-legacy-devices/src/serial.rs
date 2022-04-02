@@ -6,15 +6,28 @@
 // Use of this source code is governed by a BSD-style license that can be
 // found in the THIRD-PARTY file.
 use std::io::Write;
-use std::sync::Arc;
+use std::sync::{Mutex,Arc};
+use std::rc::Rc;
 
 use dbs_device::{DeviceIoMut, IoAddress, PioAddress};
 use dbs_utils::metric::{IncMetric, SharedIncMetric};
 use log::error;
 use serde::Serialize;
 use vm_superio::{serial::SerialEvents, Serial, Trigger};
+use vmm_sys_util::eventfd::EventFd;
 
 use crate::EventFdTrigger;
+
+/// Trait for devices that handle raw non-blocking I/O requests.
+pub trait ConsoleHandler {
+    /// Send raw input to this emulated device.
+    fn raw_input(&mut self, _data: &[u8]) -> std::io::Result<usize> {
+        Ok(0)
+    }
+
+    /// Set the stream to receive raw output from this emulated device.
+    fn set_output_stream(&mut self, out: Option<Box<dyn Write + Send>>);
+}
 
 /// Metrics specific to the UART device.
 #[derive(Default, Serialize)]
@@ -66,15 +79,46 @@ impl SerialEvents for SerialEventsWrapper {
     }
 }
 
-pub type SerialDevice = SerialWrapper<EventFdTrigger, SerialEventsWrapper, Box<dyn Write + Send>>;
+pub type SerialDevice = SerialWrapper<EventFdTrigger, SerialEventsWrapper>;
 
-pub struct SerialWrapper<T: Trigger, EV: SerialEvents, W: Write> {
-    pub serial: Serial<T, EV, W>,
+impl SerialDevice {
+    pub fn new(event: EventFd) -> Self {
+        let out = Arc::new(Mutex::new(None));
+        //let out = Arc::new(std::cell::RefCell::new(None));
+        Self {
+            serial: Serial::with_events(
+                EventFdTrigger::new(event),
+                SerialEventsWrapper {
+                    metrics: Arc::new(SerialDeviceMetrics::default()),
+                    buffer_ready_event_fd: None,
+                },
+                AdapterWriter(out.clone()),
+            ),
+            out,
+        }
+    }
 }
 
-impl<W: Write + Send + 'static> DeviceIoMut
-    for SerialWrapper<EventFdTrigger, SerialEventsWrapper, W>
-{
+pub struct SerialWrapper<T: Trigger, EV: SerialEvents> {
+    pub serial: Serial<T, EV, AdapterWriter>,
+    pub out: Arc<Mutex<Option<Box<dyn Write + Send>>>>,
+    //pub out: Arc<std::cell::RefCell<Option<Box<dyn Write + Send>>>>,
+}
+
+impl ConsoleHandler for SerialWrapper<EventFdTrigger, SerialEventsWrapper> {
+    fn raw_input(&mut self, data: &[u8]) -> std::io::Result<usize> {
+        self.serial
+            .enqueue_raw_bytes(data)
+            .map_err(|e| std::io::Error::new(std::io::ErrorKind::Other, format!("{:?}", e)))
+    }
+
+    fn set_output_stream(&mut self, out: Option<Box<dyn Write + Send>>) {
+        *self.out.lock().unwrap() = out;
+        //self.out.replace(out);
+    }
+}
+
+impl DeviceIoMut for SerialWrapper<EventFdTrigger, SerialEventsWrapper> {
     fn pio_read(&mut self, _base: PioAddress, offset: PioAddress, data: &mut [u8]) {
         if data.len() != 1 {
             self.serial.events().metrics.missed_read_count.inc();
@@ -112,12 +156,35 @@ impl<W: Write + Send + 'static> DeviceIoMut
     }
 }
 
+pub struct AdapterWriter(pub Arc<Mutex<Option<Box<dyn Write + Send>>>>);
+//pub struct AdapterWriter(pub Arc<std::cell::RefCell<Option<Box<dyn Write + Send>>>>);
+
+impl Write for AdapterWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        use std::ops::DerefMut;
+        if let Some(w) = self.0.lock().unwrap().as_mut() {
+        //if let Some(w) = self.0.borrow_mut().deref_mut() {
+            w.write(buf)
+        } else {
+            Ok(buf.len())
+        }
+    }
+
+    fn flush(&mut self) -> std::io::Result<()> {
+        if let Some(w) = self.0.lock().unwrap().as_mut() {
+        //if let Some(w) = &mut *self.0.borrow_mut() {
+            w.flush()
+        } else {
+            Ok(())
+        }
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
     use std::io;
     use std::sync::{Arc, Mutex};
-    use vmm_sys_util::eventfd::EventFd;
 
     #[derive(Clone)]
     struct SharedBuffer {

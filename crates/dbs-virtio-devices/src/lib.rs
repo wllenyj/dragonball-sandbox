@@ -147,6 +147,12 @@ pub enum Error {
     /// Device resource doesn't match what requested
     #[error("invalid resource.")]
     InvalidResource,
+    /// Cannot access AddressSpace.
+    #[error("cannot access address space, not initialized.")]
+    AddressSpaceNotInitialized,
+    /// AddressSpace region error.
+    #[error("address space region error: {0:?}")]
+    AddressSpaceRegion(dbs_address_space::AddressSpaceError),
     /// Generic IO error
     #[error("IO: {0}.")]
     IOError(#[from] IOError),

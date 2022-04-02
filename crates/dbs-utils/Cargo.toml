@@ -11,6 +11,8 @@ readme = "README.md"
 
 [dependencies]
 anyhow = "1.0"
+arc-swap = "1.5.0"
+dbs-device = { version = "0.1.0", path = "../dbs-device" }
 event-manager = { version = "0.2.1", features = [ "remote_endpoint" ] }
 libc = "0.2.39"
 log = "0.4.14"

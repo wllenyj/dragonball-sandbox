@@ -11,6 +11,7 @@ keywords = ["dragonball", "secure-sandbox", "devices", "virtio"]
 readme = "README.md"
 
 [dependencies]
+dbs-address-space = { version = "0.1.0", path = "../dbs-address-space" }
 blobfs = { git = "https://github.com/dragonflyoss/image-service.git", optional = true }
 byteorder = "1.4.3"
 caps = "0.5.3"

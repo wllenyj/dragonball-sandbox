@@ -214,7 +214,7 @@ pub trait DeviceIo: Send + Sync {
 ///
 /// The Mutex<T: DeviceIoMut> adapter is an zero overhead abstraction without performance penalty.
 #[allow(unused_variables)]
-pub trait DeviceIoMut: Send {
+pub trait DeviceIoMut {
     /// Read from the MMIO address `base + offset` into `data`.
     fn read(&mut self, base: IoAddress, offset: IoAddress, data: &mut [u8]) {}
 
@@ -241,7 +241,7 @@ pub trait DeviceIoMut: Send {
     }
 }
 
-impl<T: DeviceIoMut> DeviceIo for Mutex<T> {
+impl<T: DeviceIoMut + Send> DeviceIo for Mutex<T> {
     fn read(&self, base: IoAddress, offset: IoAddress, data: &mut [u8]) {
         // Safe to unwrap() because we don't expect poisoned lock here.
         self.lock().unwrap().read(base, offset, data)
