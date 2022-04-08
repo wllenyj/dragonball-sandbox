@@ -65,6 +65,9 @@ impl DeviceIoMut for I8042Wrapper<EventFdTrigger> {
             self.metrics.write_count.inc();
         }
     }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 #[cfg(test)]

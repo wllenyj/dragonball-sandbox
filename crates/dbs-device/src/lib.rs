@@ -204,6 +204,9 @@ pub trait DeviceIo: Send + Sync {
     fn get_trapped_io_resources(&self) -> DeviceResources {
         self.get_assigned_resources()
     }
+
+    /// aaaa
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
 /// Trait for device to handle trapped MMIO/PIO access requests.
@@ -239,9 +242,12 @@ pub trait DeviceIoMut {
     fn get_trapped_io_resources(&self) -> DeviceResources {
         self.get_assigned_resources()
     }
+
+    /// aaaa
+    fn as_any(&self) -> &dyn std::any::Any;
 }
 
-impl<T: DeviceIoMut + Send> DeviceIo for Mutex<T> {
+impl<T: DeviceIoMut + Send + 'static> DeviceIo for Mutex<T> {
     fn read(&self, base: IoAddress, offset: IoAddress, data: &mut [u8]) {
         // Safe to unwrap() because we don't expect poisoned lock here.
         self.lock().unwrap().read(base, offset, data)
@@ -270,6 +276,10 @@ impl<T: DeviceIoMut + Send> DeviceIo for Mutex<T> {
     fn get_trapped_io_resources(&self) -> DeviceResources {
         // Safe to unwrap() because we don't expect poisoned lock here.
         self.lock().unwrap().get_trapped_io_resources()
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

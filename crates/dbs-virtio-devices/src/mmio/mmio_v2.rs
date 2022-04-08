@@ -339,8 +339,8 @@ where
 impl<AS, Q, R> DeviceIo for MmioV2Device<AS, Q, R>
 where
     AS: 'static + GuestAddressSpace + Clone + Send + Sync,
-    Q: QueueStateT + Send + Clone,
-    R: GuestMemoryRegion + Send + Sync,
+    Q: QueueStateT + Send + Clone + 'static,
+    R: GuestMemoryRegion + Send + Sync + 'static,
 {
     fn read(&self, _base: IoAddress, offset: IoAddress, data: &mut [u8]) {
         let offset = offset.raw_value();
@@ -470,6 +470,10 @@ where
         resources.append(self.mmio_cfg_res.clone());
 
         resources
+    }
+
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
     }
 }
 

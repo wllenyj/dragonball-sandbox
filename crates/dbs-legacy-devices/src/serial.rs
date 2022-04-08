@@ -154,6 +154,9 @@ impl DeviceIoMut for SerialWrapper<EventFdTrigger, SerialEventsWrapper> {
             self.serial.events().metrics.error_count.inc();
         }
     }
+    fn as_any(&self) -> &dyn std::any::Any {
+        self
+    }
 }
 
 pub struct AdapterWriter(pub Arc<Mutex<Option<Box<dyn Write + Send>>>>);
