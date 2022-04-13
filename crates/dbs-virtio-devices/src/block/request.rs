@@ -6,7 +6,7 @@ use std::io::{self, Seek, SeekFrom, Write};
 use std::ops::Deref;
 use std::result;
 
-use log::error;
+use log::{info, error};
 use virtio_bindings::bindings::virtio_blk::*;
 use virtio_queue::{Descriptor, DescriptorChain};
 use vm_memory::{ByteValued, Bytes, GuestAddress, GuestMemory, GuestMemoryError};
@@ -95,6 +95,15 @@ impl RequestHeader {
 pub struct IoDataDesc {
     pub data_addr: u64,
     pub data_len: usize,
+}
+
+impl From<libc::iovec> for IoDataDesc {
+    fn from(iov: libc::iovec) -> Self {
+        Self {
+            data_addr: iov.iov_base as u64,
+            data_len: iov.iov_len,
+        }
+    }
 }
 
 /// The block request.
@@ -250,10 +259,12 @@ impl Request {
                     mem.write_to(GuestAddress(io.data_addr), disk, io.data_len)
                         .map_err(ExecuteError::Write)?;
                 }
-                RequestType::Flush => match disk.flush() {
+                RequestType::Flush => {
+                    info!("========> blk: flush");
+                    match disk.flush() {
                     Ok(_) => {}
                     Err(e) => return Err(ExecuteError::Flush(e)),
-                },
+                }},
                 RequestType::GetDeviceID => {
                     if io.data_len < disk_id.len() {
                         return Err(ExecuteError::BadRequest(Error::InvalidOffset));
