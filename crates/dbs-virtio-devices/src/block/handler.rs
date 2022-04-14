@@ -8,10 +8,15 @@
 use std::collections::HashMap;
 use std::ops::Deref;
 use std::os::unix::io::AsRawFd;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, Sender};
+use std::sync::Arc;
 
 use dbs_utils::{
-    epoll_manager::{EventOps, Events, MutEventSubscriber},
+    epoll_manager::{
+        Error as EpollError, EventManager, EventOps, EventSet, Events, MutEventSubscriber,
+        SubscriberOps,
+    },
     rate_limiter::{BucketUpdate, RateLimiter, TokenType},
 };
 use log::{debug, error, info, warn};
@@ -20,10 +25,7 @@ use virtio_queue::{QueueState, QueueStateT};
 use vm_memory::{Bytes, GuestAddress, GuestMemory, GuestMemoryRegion, GuestRegionMmap};
 use vmm_sys_util::eventfd::EventFd;
 
-use crate::{
-    epoll_helper::{EpollHelper, EpollHelperError, EpollHelperHandler},
-    DbsGuestAddressSpace, Error, Result, VirtioDeviceConfig, VirtioQueueConfig,
-};
+use crate::{DbsGuestAddressSpace, Error, Result, VirtioDeviceConfig, VirtioQueueConfig};
 
 use super::{ExecuteError, IoDataDesc, KillEvent, Request, RequestType, Ufile, SECTOR_SHIFT};
 
@@ -44,6 +46,7 @@ pub(crate) struct InnerBlockEpollHandler<AS: DbsGuestAddressSpace, Q: QueueState
     pub(crate) data_desc_vec: Vec<Vec<IoDataDesc>>,
     pub(crate) iovecs_vec: Vec<Vec<IoDataDesc>>,
     pub(crate) kill_evt: EventFd,
+    pub(crate) exit_flag: Arc<AtomicBool>,
     pub(crate) evt_receiver: Receiver<KillEvent>,
 
     pub(crate) vm_as: AS,
@@ -353,36 +356,74 @@ impl<AS: DbsGuestAddressSpace, Q: QueueStateT> InnerBlockEpollHandler<AS, Q> {
             String::from_utf8(self.disk_image_id.clone())
         );
     }
+}
 
-    pub(crate) fn run(&mut self) -> std::result::Result<(), EpollHelperError> {
-        let mut helper = EpollHelper::new()?;
-        helper.add_event(self.queue.eventfd.as_raw_fd(), QUEUE_AVAIL_EVENT)?;
-        helper.add_event_custom(
-            self.disk_image.get_data_evt_fd(),
-            END_IO_EVENT,
-            epoll::Events::EPOLLIN | epoll::Events::EPOLLET,
-        )?;
+pub(crate) fn run<AS: DbsGuestAddressSpace, Q: QueueStateT>(
+    handler: Box<InnerBlockEpollHandler<AS, Q>>,
+) -> std::result::Result<(), EpollError> {
+    let mut epoll_manager = EventManager::<Box<InnerBlockEpollHandler<AS, Q>>>::new()?;
+    let exit_flag = Arc::clone(&handler.exit_flag);
+    let _sub_id = epoll_manager.add_subscriber(handler);
 
-        helper.add_event(self.rate_limiter.as_raw_fd(), RATE_LIMITER_EVENT)?;
-
-        helper.add_event(self.kill_evt.as_raw_fd(), KILL_EVENT)?;
-
-        helper.run(self)?;
-
-        Ok(())
+    loop {
+        match epoll_manager.run() {
+            Ok(_) => {
+                if exit_flag.load(Ordering::Relaxed) {
+                    return Ok(());
+                }
+            }
+            Err(e) => {
+                if let EpollError::Epoll(e) = e {
+                    if e.errno() == libc::EAGAIN || e.errno() == libc::EINTR {
+                        continue;
+                    }
+                }
+                return Err(e);
+            }
+        }
     }
 }
 
-impl<AS: DbsGuestAddressSpace, Q: QueueStateT> EpollHelperHandler
+impl<AS: DbsGuestAddressSpace, Q: QueueStateT> MutEventSubscriber
     for InnerBlockEpollHandler<AS, Q>
 {
-    fn handle_event(&mut self, _helper: &mut EpollHelper, event: &epoll::Event) -> bool {
-        let slot = event.data as u32;
-        match slot {
+    fn init(&mut self, ops: &mut EventOps) {
+        let events = Events::with_data(
+            &self.queue.eventfd.as_raw_fd(),
+            QUEUE_AVAIL_EVENT,
+            EventSet::IN,
+        );
+        ops.add(events)
+            .expect("virtio-blk: failed to register QUEUE_AVAIL_EVENT.");
+
+        ops.add(Events::with_data(
+            &self.disk_image.get_data_evt_fd(),
+            END_IO_EVENT,
+            EventSet::IN | EventSet::EDGE_TRIGGERED,
+        ))
+        .expect("virtio-blk: failed to register io complete event.");
+
+        ops.add(Events::with_data(
+            &self.rate_limiter.as_raw_fd(),
+            RATE_LIMITER_EVENT,
+            EventSet::IN,
+        ))
+        .expect("virtio-blk: failed to register RATE_LIMITER_EVENT.");
+
+        ops.add(Events::with_data(
+            &self.kill_evt.as_raw_fd(),
+            KILL_EVENT,
+            EventSet::IN,
+        ))
+        .expect("virtio-blk: failed to register KILL_EVENT.");
+    }
+
+    fn process(&mut self, events: Events, _ops: &mut EventOps) {
+        match events.data() {
             QUEUE_AVAIL_EVENT => {
                 if let Err(e) = self.queue.consume_event() {
                     error!("virtio-blk: failed to get queue event: {:?}", e);
-                    return true;
+                    return;
                 } else if self.rate_limiter.is_blocked() {
                     // While limiter is blocked, don't process any more requests.
                 } else if self.process_queue() {
@@ -414,8 +455,8 @@ impl<AS: DbsGuestAddressSpace, Q: QueueStateT> EpollHelperHandler
                     match evt {
                         KillEvent::Kill => {
                             info!("virtio-blk: KILL_EVENT received, stopping inner epoll handler loop");
-
-                            return true;
+                            self.exit_flag.store(true, Ordering::Relaxed);
+                            return;
                         }
                         KillEvent::BucketUpdate(bytes, ops) => {
                             info!(
@@ -427,9 +468,8 @@ impl<AS: DbsGuestAddressSpace, Q: QueueStateT> EpollHelperHandler
                     }
                 }
             }
-            _ => panic!("virtio_blk: unknown event slot {}", slot),
+            _ => panic!("virtio_blk: unknown event slot {}", events.data()),
         }
-        false
     }
 }
 

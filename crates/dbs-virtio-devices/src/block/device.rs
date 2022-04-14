@@ -10,6 +10,7 @@ use std::any::Any;
 use std::collections::HashMap;
 use std::io::{Seek, SeekFrom};
 use std::marker::PhantomData;
+use std::sync::atomic::AtomicBool;
 use std::sync::{mpsc, Arc};
 use std::thread;
 
@@ -30,8 +31,8 @@ use crate::{
 };
 
 use super::{
-    BlockEpollHandler, InnerBlockEpollHandler, KillEvent, Ufile, BLK_DRIVER_NAME, SECTOR_SHIFT,
-    SECTOR_SIZE,
+    handler::run, BlockEpollHandler, InnerBlockEpollHandler, KillEvent, Ufile, BLK_DRIVER_NAME,
+    SECTOR_SHIFT, SECTOR_SIZE,
 };
 
 /// Supported fields in the configuration space:
@@ -263,7 +264,7 @@ where
 
             let kill_evt = EventFd::new(EFD_NONBLOCK)?;
 
-            let mut handler = Box::new(InnerBlockEpollHandler {
+            let handler = Box::new(InnerBlockEpollHandler {
                 rate_limiter,
                 disk_image,
                 disk_image_id,
@@ -271,6 +272,7 @@ where
                 data_desc_vec,
                 iovecs_vec,
                 evt_receiver,
+                exit_flag: Arc::new(AtomicBool::new(false)),
                 vm_as: config.vm_as.clone(),
                 queue,
                 kill_evt: kill_evt.try_clone().unwrap(),
@@ -282,7 +284,7 @@ where
             thread::Builder::new()
                 .name(format!("{}_q{}", "blk_iothread", i))
                 .spawn(move || {
-                    if let Err(e) = handler.run() {
+                    if let Err(e) = run(handler) {
                         error!("Error running worker: {:?}", e);
                     }
                 })
