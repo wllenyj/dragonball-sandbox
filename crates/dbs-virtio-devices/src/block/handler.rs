@@ -46,7 +46,7 @@ pub(crate) struct InnerBlockEpollHandler<AS: DbsGuestAddressSpace, Q: QueueState
     pub(crate) data_desc_vec: Vec<Vec<IoDataDesc>>,
     pub(crate) iovecs_vec: Vec<Vec<IoDataDesc>>,
     pub(crate) kill_evt: EventFd,
-    pub(crate) exit_flag: Arc<AtomicBool>,
+    pub(crate) exit_flag: bool,
     pub(crate) evt_receiver: Receiver<KillEvent>,
 
     pub(crate) vm_as: AS,
@@ -356,20 +356,25 @@ impl<AS: DbsGuestAddressSpace, Q: QueueStateT> InnerBlockEpollHandler<AS, Q> {
             String::from_utf8(self.disk_image_id.clone())
         );
     }
-}
 
-pub(crate) fn run<AS: DbsGuestAddressSpace, Q: QueueStateT>(
-    handler: Box<InnerBlockEpollHandler<AS, Q>>,
-) -> std::result::Result<(), EpollError> {
-    let mut epoll_manager = EventManager::<Box<InnerBlockEpollHandler<AS, Q>>>::new()?;
-    let exit_flag = Arc::clone(&handler.exit_flag);
-    let _sub_id = epoll_manager.add_subscriber(handler);
+pub(crate) fn run(&mut self) -> std::result::Result<(), EpollError> {
+    let mut epoll_manager = EventManager::<&mut Self>::new()?;
+    //let exit_flag = Arc::clone(&handler.exit_flag);
+    let sub_id = epoll_manager.add_subscriber(self);
 
     loop {
         match epoll_manager.run() {
             Ok(_) => {
-                if exit_flag.load(Ordering::Relaxed) {
-                    return Ok(());
+                //if exit_flag.load(Ordering::Relaxed) {
+                //    return Ok(());
+                //}
+                //if handler.exit_flag {
+                //    return Ok(());
+                //}
+                if let Ok(h) = epoll_manager.subscriber_mut(sub_id) {
+                    if h.exit_flag {
+                        return Ok(());
+                    }
                 }
             }
             Err(e) => {
@@ -383,9 +388,10 @@ pub(crate) fn run<AS: DbsGuestAddressSpace, Q: QueueStateT>(
         }
     }
 }
+}
 
 impl<AS: DbsGuestAddressSpace, Q: QueueStateT> MutEventSubscriber
-    for InnerBlockEpollHandler<AS, Q>
+    for &mut InnerBlockEpollHandler<AS, Q>
 {
     fn init(&mut self, ops: &mut EventOps) {
         let events = Events::with_data(
@@ -455,7 +461,8 @@ impl<AS: DbsGuestAddressSpace, Q: QueueStateT> MutEventSubscriber
                     match evt {
                         KillEvent::Kill => {
                             info!("virtio-blk: KILL_EVENT received, stopping inner epoll handler loop");
-                            self.exit_flag.store(true, Ordering::Relaxed);
+                            //self.exit_flag.store(true, Ordering::Relaxed);
+                            self.exit_flag = true;
                             return;
                         }
                         KillEvent::BucketUpdate(bytes, ops) => {
