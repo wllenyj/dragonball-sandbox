@@ -24,7 +24,7 @@ use dbs_interrupt::{InterruptNotifier, NoopNotifier};
 use dbs_utils::epoll_manager::{EpollManager, EpollSubscriber, SubscriberId};
 use kvm_ioctls::VmFd;
 use log::{error, warn};
-use virtio_queue::{DescriptorChain, QueueState, QueueStateSync, QueueStateT};
+use virtio_queue::{DescriptorChain, QueueState, QueueStateOwnedT, QueueStateSync, QueueStateT};
 use vm_memory::{
     Address, GuestAddress, GuestAddressSpace, GuestMemory, GuestMemoryRegion, GuestRegionMmap,
     GuestUsize,

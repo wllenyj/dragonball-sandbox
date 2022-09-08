@@ -11,7 +11,7 @@ use std::ops::Deref;
 
 use dbs_utils::epoll_manager::{EventOps, EventSet, Events, MutEventSubscriber};
 use log::{error, trace, warn};
-use virtio_queue::{QueueState, QueueStateT};
+use virtio_queue::{QueueState, QueueStateOwnedT, QueueStateT};
 use vm_memory::{GuestMemoryRegion, GuestRegionMmap};
 
 use super::defs;

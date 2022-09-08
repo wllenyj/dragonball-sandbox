@@ -25,7 +25,7 @@ use libc;
 use log::{debug, error, info, trace};
 use serde::Serialize;
 use virtio_bindings::bindings::virtio_net::*;
-use virtio_queue::{QueueState, QueueStateT};
+use virtio_queue::{QueueState, QueueStateOwnedT, QueueStateT};
 use vm_memory::{Bytes, GuestAddress, GuestAddressSpace, GuestMemoryRegion, GuestRegionMmap};
 use vmm_sys_util::eventfd::EventFd;
 
