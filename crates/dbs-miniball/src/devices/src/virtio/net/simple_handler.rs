@@ -41,16 +41,16 @@ impl From<virtio_queue::Error> for Error {
 // TODO: Find a better name.
 pub struct SimpleHandler<M: GuestAddressSpace, S: SignalUsedQueue> {
     pub driver_notify: S,
-    pub rxq: Queue<M>,
+    pub rxq: Queue,
     pub rxbuf_current: usize,
     pub rxbuf: [u8; MAX_BUFFER_SIZE],
-    pub txq: Queue<M>,
+    pub txq: Queue,
     pub txbuf: [u8; MAX_BUFFER_SIZE],
     pub tap: Tap,
 }
 
 impl<M: GuestAddressSpace, S: SignalUsedQueue> SimpleHandler<M, S> {
-    pub fn new(driver_notify: S, rxq: Queue<M>, txq: Queue<M>, tap: Tap) -> Self {
+    pub fn new(driver_notify: S, rxq: Queue, txq: Queue, tap: Tap) -> Self {
         SimpleHandler {
             driver_notify,
             rxq,

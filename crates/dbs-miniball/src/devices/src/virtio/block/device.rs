@@ -144,7 +144,7 @@ impl<M: GuestAddressSpace + Clone + Send + 'static> VirtioDeviceActions for Bloc
     }
 }
 
-impl<M: GuestAddressSpace + Clone + Send + 'static> VirtioMmioDevice<M> for Block<M> {}
+impl<M: GuestAddressSpace + Clone + Send + 'static> VirtioMmioDevice for Block<M> {}
 
 impl<M: GuestAddressSpace + Clone + Send + 'static> MutDeviceMmio for Block<M> {
     fn mmio_read(&mut self, _base: MmioAddress, offset: u64, data: &mut [u8]) {

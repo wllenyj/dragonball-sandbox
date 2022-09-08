@@ -44,7 +44,7 @@ impl From<stdio_executor::ProcessReqError> for Error {
 // chains back to the device in the same order they are received.
 pub struct InOrderQueueHandler<M: GuestAddressSpace, S: SignalUsedQueue> {
     pub driver_notify: S,
-    pub queue: Queue<M>,
+    pub queue: Queue,
     pub disk: StdIoBackend<File>,
 }
 
